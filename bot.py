@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # This token should be kept confidential.
-TOKEN = "8260847467:AAHxVuDpo2AoqtWcgYlIWlTQ9loKzylWcE8"
+TOKEN =" "
 
 # Savage coin flip responses
 coin_responses = [
@@ -94,7 +94,7 @@ command_timestamps = defaultdict(list)
 roast_battles = {}
 # Admins list - replace with your actual user IDs
 ADMINS = [
-    123456789
+    
 ]
 
 # --- Bot's Command Rate Limiter ---
