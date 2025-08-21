@@ -1,4 +1,5 @@
-import cohere
+import os
+import uuid
 import random
 import logging
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, User
@@ -16,15 +17,28 @@ import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict
 import json
+import requests
+from groq import Groq # Import the Groq library
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # This token should be kept confidential.
-TOKEN =" "
+TOKEN = "8260847467:AAHxVuDpo2AoqtWcgYlIWlTQ9loKzylWcE8"
 
-# Savage coin flip responses
+# Initialize Groq client
+try:
+    groq_client = Groq(
+        api_key=os.environ.get("GROQ_API_KEY"),
+    )
+    AI_ENABLED = True
+    logger.info("Groq client initialized successfully.")
+except Exception as e:
+    logger.warning(f"Failed to initialize Groq client: {e}")
+    AI_ENABLED = False
+
+# Savage coin flip responses (fallback)
 coin_responses = [
     "Heads? The closest you'll come to a brainstorm is a light drizzle 💀",
     "Tails! I'm just impressed you can operate a phone honestly 😭",
@@ -38,13 +52,13 @@ coin_responses = [
     "Tails! You're proof that evolution can go in reverse 🐵"
 ]
 
-# 8-Ball responses (even more savage)
+# 8-Ball responses (even more savage) - fallback
 magic8_responses = [
     "Yes... but your judgment is still worse than a broken GPS 🎱",
     "No... and honestly neither should half your life choices 💀",
     "Maybe... if you had more than two brain cells to work with 🧠",
     "Absolutely not... what kind of question was that seriously? 🤦‍♂️",
-    "Signs point to yes... signs also point to you needing adult supervision 📍",
+    "Signs point to yes... signs also point to you needing adult supervision 🔍",
     "Reply hazy... just like your understanding of common sense 🌫️",
     "Don't count on it... just like everyone stopped counting on you 📉",
     "It is certain... that you'll find a way to mess this up anyway 💯",
@@ -52,7 +66,7 @@ magic8_responses = [
     "Better not tell you now... you'd probably cry about it 😭"
 ]
 
-# Roast responses for random messages
+# Roast responses for random messages (fallback)
 roast_responses = [
     "Did you just send me a random message? The audacity is unreal 💀",
     "I'm a coin flip bot not your therapist, try /toss instead 🤖",
@@ -66,7 +80,7 @@ roast_responses = [
     "I don't want to rain on your parade, I want a typhoon 🌪️"
 ]
 
-# Brutal roasts for the /roast command
+# Brutal roasts for the /roast command (fallback)
 brutal_roasts = [
     "You asked to be roasted? The mirror already does that daily 💀",
     "I'd roast you but you're already burnt from life's disappointments 🔥",
@@ -85,6 +99,73 @@ brutal_roasts = [
     "Are you at a loss for words or did you exhaust your entire vocabulary? 📚"
 ]
 
+# AI Helper Functions
+async def generate_ai_response(prompt, response_type="general", fallback_list=None):
+    """Generate AI response with fallback to random responses using Groq."""
+    if not AI_ENABLED:
+        return random.choice(fallback_list) if fallback_list else "AI is currently unavailable, using my backup sass 🤖"
+    
+    try:
+        # Craft prompts based on response type
+        if response_type == "coin_flip":
+            ai_prompt = f"""You are a savage, sarcastic Telegram bot. A user just got {prompt} on a coin flip. 
+            Respond with maximum attitude and sass. Be brutally funny but not offensive. 
+            Keep it under 100 characters. Include relevant emojis. Make it sound like you're roasting them for needing a coin flip to make decisions.
+            Examples: "Heads? The closest you'll come to a brainstorm is a light drizzle 💀", "Tails! Plot twist: you were gonna ignore the result anyway 🙄" """
+            
+        elif response_type == "magic_8ball":
+            ai_prompt = f"""You are a savage, sarcastic magic 8-ball bot. The user asked: "{prompt}"
+            Give a typical magic 8-ball answer (yes/no/maybe/unclear) but with maximum sass and attitude. 
+            Be brutally funny but not offensive. Keep it under 120 characters. Include emojis.
+            Examples: "Yes... but your judgment is still worse than a broken GPS 🎱", "Maybe... if you had more than two brain cells to work with 🧠" """
+            
+        elif response_type == "roast":
+            ai_prompt = f"""You are a savage roast bot. The user asked to be roasted. 
+            Generate an absolutely brutal but funny roast. Be creative and savage but not offensive or mean-spirited. 
+            Keep it under 150 characters. Include fire emojis and skull emojis.
+            Make it about their life choices, decision-making skills, or general existence."""
+            
+        elif response_type == "random_message":
+            ai_prompt = f"""You are a savage Telegram bot. A user sent you a random message: "{prompt}"
+            Respond with maximum sass for them sending random text instead of using proper commands.
+            Be brutally funny but not offensive. Keep it under 100 characters. Include relevant emojis.
+            Tell them to use proper commands like /toss or get roasted."""
+        
+        elif response_type == "creativity_rating":
+             ai_prompt = f"Rate the creativity of this roast completion: '{prompt}' Give a savage rating."
+             
+        elif response_type == "regret_scenario":
+            ai_prompt = f"Generate a regret scenario for this decision: '{prompt}'. Show how it could have gone better if they chose differently."
+
+        elif response_type == "confession_judgment":
+            ai_prompt = f"Rate the stupidity level (1-10) of this confession and give a savage judgment: '{prompt}'"
+
+        else:
+            ai_prompt = prompt
+
+        # Generate response using Groq client
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": ai_prompt,
+                }
+            ],
+            model="llama-3.1-8b-instant", # You can change this to another Groq model
+        )
+        ai_text = chat_completion.choices[0].message.content.strip()
+        
+        # Ensure response isn't too long
+        if len(ai_text) > 200:
+            ai_text = ai_text[:197] + "..."
+            
+        return ai_text
+        
+    except Exception as e:
+        logger.error(f"AI generation failed: {e}")
+        # Fallback to random response
+        return random.choice(fallback_list) if fallback_list else "My AI brain is taking a coffee break, here's my backup sass 🤖"
+    
 # --- In-memory data stores ---
 # User stats storage
 user_stats = {}
@@ -94,7 +175,7 @@ command_timestamps = defaultdict(list)
 roast_battles = {}
 # Admins list - replace with your actual user IDs
 ADMINS = [
-    
+    123456789
 ]
 
 # --- Bot's Command Rate Limiter ---
@@ -163,7 +244,9 @@ async def toss(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = get_user_stats(user_id)
 
     result = random.choice(["Heads", "Tails"])
-    msg = random.choice(coin_responses)
+    
+    # Generate AI response instead of random
+    msg = await generate_ai_response(result, "coin_flip", coin_responses)
 
     # Update stats
     stats['tosses'] += 1
@@ -216,12 +299,15 @@ async def dice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats['challenge_progress'] = 0
         return
 
-    dice_roasts = [
+    # Generate AI response for dice roll
+    dice_roasts_fallback = [
         f"🎲 You rolled a {dice_result}! Congrats on your incredible luck, not really",
         f"🎲 {dice_result}! Even random numbers are disappointed in you",
         f"🎲 Got a {dice_result}! Your dice rolling skills match your life choices"
     ]
-    await update.message.reply_text(random.choice(dice_roasts))
+    
+    ai_response = await generate_ai_response(f"The user rolled a {dice_result} on a dice", "general", dice_roasts_fallback)
+    await update.message.reply_text(f"🎲 {ai_response}")
 
 async def magic8ball(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_rate_limited(update.effective_user.id):
@@ -237,7 +323,9 @@ async def magic8ball(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     question = " ".join(context.args)
-    answer = random.choice(magic8_responses)
+    
+    # Generate AI response instead of random
+    answer = await generate_ai_response(question, "magic_8ball", magic8_responses)
 
     # Judge question quality for challenges
     stupid_questions = ['should i', 'will i', 'am i', 'do i', 'can i']
@@ -281,7 +369,12 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     choice = random.choice(options)
-    await update.message.reply_text(f"🎯 I choose: **{choice}**\n\nBut let's be real, you'll probably ignore this and regret it later 💀")
+    
+    # Generate AI response for the prediction
+    prediction_prompt = f"I'm choosing {choice} between {options[0]} and {options[1]} for the user"
+    ai_response = await generate_ai_response(prediction_prompt, "general", [f"But let's be real, you'll probably ignore this and regret it later 💀"])
+    
+    await update.message.reply_text(f"🎯 I choose: **{choice}**\n\n{ai_response}")
 
 async def random_picker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_rate_limited(update.effective_user.id):
@@ -294,19 +387,56 @@ async def random_picker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     choices = context.args
     pick = random.choice(choices)
-    await update.message.reply_text(f"🎪 From your list of questionable choices, I pick: **{pick}**\n\nYou're welcome for saving you from decision paralysis 🤡")
+    
+    # Generate AI response
+    picker_prompt = f"I picked {pick} from the user's list: {', '.join(choices)}"
+    ai_response = await generate_ai_response(picker_prompt, "general", ["You're welcome for saving you from decision paralysis 🤡"])
+    
+    await update.message.reply_text(f"🎪 From your list of questionable choices, I pick: **{pick}**\n\n{ai_response}")
 
-async def roast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if is_rate_limited(update.effective_user.id):
-        await update.message.reply_text("Chill out, you're sending too many commands! ⏳")
+
+async def roast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends an AI-generated roast based on user's input."""
+    if not AI_ENABLED:
+        await update.message.reply_text("The AI service is currently unavailable. Try again later.")
         return
 
-    user_id = update.effective_user.id
-    stats = get_user_stats(user_id)
-    stats['roasts_received'] += 1
+    user_text = " ".join(context.args)
+    if not user_text:
+        await update.message.reply_text("Please provide something to roast, e.g., `/roast your fashion sense`")
+        return
 
-    roast_msg = random.choice(brutal_roasts)
-    await update.message.reply_text(f"🔥 **ROAST ACTIVATED** 🔥\n\n{roast_msg}")
+    full_prompt = (
+        f"You are a savage bot with a sarcastic and dark sense of humor. "
+        f"Generate a brutal roast for me. The roast should be based on the following text: '{user_text}'. "
+        f"The response should be strictly a roast and nothing else."
+    )
+
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": full_prompt,
+                }
+            ],
+            model="llama-3.1-8b-instant",  # You can change this to another Groq model
+        )
+        text_response = chat_completion.choices[0].message.content
+        if not text_response:
+            text_response = random.choice(fallbacks["roast"])
+    except Exception as e:
+        logger.error(f"Error while generating roast with Groq AI: {e}")
+        text_response = random.choice(fallbacks["roast"])
+        
+    await update.message.reply_text(text_response)
+
+    # Update user stats
+    user_id = update.effective_user.id
+    if user_id in user_stats:
+        user_stats[user_id]["roasts_received"] += 1
+    else:
+        user_stats[user_id] = {"roasts_received": 1}
 
 async def challenges(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_rate_limited(update.effective_user.id):
@@ -583,15 +713,17 @@ async def handle_random_message(update: Update, context: ContextTypes.DEFAULT_TY
         starter = context.user_data['roast_starter']
         stats['roast_completions'] += 1
 
-        creativity_ratings = [
+        # Generate AI response for rating creativity
+        rating_prompt = f"Rate the creativity of this roast completion: '{starter} {completion}' Give a savage rating."
+        creativity_ratings_fallback = [
             "Creativity Level: Absolutely zero 📉",
             "Creativity Level: My grandmother could do better 👵",
             "Creativity Level: Did you even try? 🤷‍♂️",
             "Creativity Level: Surprisingly not terrible 📈",
             "Creativity Level: Actually decent, I'm shocked 😱"
         ]
-
-        rating = random.choice(creativity_ratings)
+        
+        rating = await generate_ai_response(rating_prompt, "general", creativity_ratings_fallback)
         await update.message.reply_text(f"🔥 **YOUR ROAST:**\n{starter} {completion}\n\n{rating}\n\nThanks for participating in your own destruction 💀")
 
         del context.user_data['roast_starter']
@@ -602,15 +734,17 @@ async def handle_random_message(update: Update, context: ContextTypes.DEFAULT_TY
         decision = update.message.text
         stats['regrets_generated'] += 1
 
-        regret_scenarios = [
+        # Generate AI regret scenario instead of random
+        regret_prompt = f"Generate a regret scenario for this decision: '{decision}'. Show how it could have gone better if they chose differently."
+        regret_scenarios_fallback = [
             f"What if you hadn't {decision.lower()}? You could've been a millionaire by now 💰",
             f"Imagine if you chose differently. You'd probably be living your best life instead of talking to a bot 🏖️",
             f"That decision to {decision.lower()} probably ruined your entire timeline. Butterfly effect is real 🦋",
             f"Alternative universe you is laughing at this decision while being successful and happy 🌌",
-            f"Plot twist: If you hadn't {decision.lower()}, you would've met your soulmate today 💔"
+            f"Plot twist: If you hadn't {decision.lower()}, you would've met your soulmate today 💕"
         ]
 
-        regret = random.choice(regret_scenarios)
+        regret = await generate_ai_response(regret_prompt, "general", regret_scenarios_fallback)
         await update.message.reply_text(f"😭 **REGRET GENERATOR RESULTS:**\n\n{regret}\n\nFeel better now? Probably not 🎭")
 
         del context.user_data['waiting_for_regret']
@@ -621,23 +755,24 @@ async def handle_random_message(update: Update, context: ContextTypes.DEFAULT_TY
         confession = update.message.text
         stats['confessions'] += 1
 
-        stupidity_level = random.randint(1, 10)
-        judgments = [
-            f"Stupidity Level: {stupidity_level}/10. That's impressively dumb 🤡",
-            f"Stupidity Level: {stupidity_level}/10. I've seen worse but this is still bad 📉",
-            f"Stupidity Level: {stupidity_level}/10. Your life choices concern me 😬",
-            f"Stupidity Level: {stupidity_level}/10. Natural selection missed you 🧬"
+        # Generate AI judgment instead of random
+        judgment_prompt = f"Rate the stupidity level (1-10) of this confession and give a savage judgment: '{confession}'"
+        judgments_fallback = [
+            f"Stupidity Level: {random.randint(1, 10)}/10. That's impressively dumb 🤡",
+            f"Stupidity Level: {random.randint(1, 10)}/10. I've seen worse but this is still bad 📉",
+            f"Stupidity Level: {random.randint(1, 10)}/10. Your life choices concern me 😬",
+            f"Stupidity Level: {random.randint(1, 10)}/10. Natural selection missed you 🧬"
         ]
 
-        judgment = random.choice(judgments)
+        judgment = await generate_ai_response(judgment_prompt, "general", judgments_fallback)
         await update.message.reply_text(f"🙏 **CONFESSION RECEIVED:**\n\n{confession}\n\n**DIVINE JUDGMENT:** {judgment}\n\nYour sins have been noted and mocked 📝")
 
         del context.user_data['waiting_for_confession']
         return
 
-    # Regular random message roasting
+    # Regular random message roasting with AI
     stats['roasts_received'] += 1
-    response = random.choice(roast_responses)
+    response = await generate_ai_response(message_text, "random_message", roast_responses)
     await update.message.reply_text(response)
 
 async def toss_callback(query, context):
@@ -645,7 +780,9 @@ async def toss_callback(query, context):
     stats = get_user_stats(user_id)
 
     result = random.choice(["Heads", "Tails"])
-    msg = random.choice(coin_responses)
+    
+    # Generate AI response instead of random
+    msg = await generate_ai_response(result, "coin_flip", coin_responses)
 
     # Update stats
     stats['tosses'] += 1
@@ -667,7 +804,8 @@ async def roast_callback(query, context):
     stats = get_user_stats(user_id)
     stats['roasts_received'] += 1
 
-    roast_msg = random.choice(brutal_roasts)
+    # Generate AI roast instead of random
+    roast_msg = await generate_ai_response("Generate a savage roast", "roast", brutal_roasts)
     await query.edit_message_text(f"🔥 **ROAST ACTIVATED** 🔥\n\n{roast_msg}")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -765,7 +903,7 @@ async def handle_challenge_selection(query, context):
         stats['challenge_active'] = 'decision_survivor'
         stats['challenge_start'] = datetime.now().strftime('%Y-%m-%d')
         stats['challenge_progress'] = 0
-        await query.edit_message_text("🏃‍♂️ **DECISION SURVIVOR CHALLENGE ACTIVATED**\n\nYour mission: Make 10 decisions today without using me. I'll be watching... and judging when you inevitably come back 👀")
+        await query.edit_message_text("🏃‍♂️ **DECISION SURVIVOR CHALLENGE ACTIVATED**\n\nYour mission: Make 10 decisions today without using me. I'll be watching... and judging when you inevitably come back 💀")
 
     elif query.data == 'challenge_luck':
         stats['challenge_active'] = 'luck_test'
@@ -851,13 +989,17 @@ async def roastfriend(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     target_user_tag = context.args[0]
 
-    roasts = [
+    # Generate AI roast for friend instead of random
+    friend_roast_prompt = f"Generate a savage roast for {target_user_tag} who was tagged by their friend"
+    roasts_fallback = [
         f"Hey {target_user_tag}, I'd roast you, but my code's not designed to handle a personality deficit of your magnitude.",
         f"Just saw {target_user_tag}'s last decision. It explains a lot, honestly. 🤦‍♂️",
         f"I've seen smarter things than {target_user_tag} and they were all lint-covered buttons on the floor.",
         f"{target_user_tag}? More like a participation trophy in the grand race of life.",
     ]
-    await update.message.reply_text(random.choice(roasts))
+    
+    roast_response = await generate_ai_response(friend_roast_prompt, "general", roasts_fallback)
+    await update.message.reply_text(roast_response)
 
 async def roastbattle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -930,7 +1072,9 @@ async def failpredict(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     decision = " ".join(context.args)
 
-    fail_responses = [
+    # Generate AI failure prediction instead of random
+    fail_prompt = f"Predict how this decision will hilariously backfire: '{decision}'"
+    fail_responses_fallback = [
         f"You decided to {decision}? The food will probably come alive and roast you for your lack of culinary skills.",
         f"Predicting your {decision} will lead to a minor disaster... and a major regret.",
         f"Hmm, you're going to {decision}. I see a future where you're talking to me about how badly it went.",
@@ -938,9 +1082,11 @@ async def failpredict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Your attempt at {decision} will be as successful as a screen door on a submarine. 💀"
     ]
 
+    fail_prediction = await generate_ai_response(fail_prompt, "general", fail_responses_fallback)
+    
     await update.message.reply_text(
         f"🔮 **PREDICTION OF FAILURE:** 🔮\n\n"
-        f"{random.choice(fail_responses)}"
+        f"{fail_prediction}"
     )
 
 async def admin_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -998,7 +1144,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Get a roast
     if "roast" in query.lower() or not query:
-        roast_text = random.choice(brutal_roasts)
+        roast_text = await generate_ai_response("Generate a savage roast", "roast", brutal_roasts)
         results.append(
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
@@ -1012,7 +1158,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # Flip a coin
     if "toss" in query.lower() or not query:
         result = random.choice(["Heads", "Tails"])
-        response_msg = random.choice(coin_responses)
+        response_msg = await generate_ai_response(result, "coin_flip", coin_responses)
         results.append(
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
@@ -1026,7 +1172,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # Magic 8-Ball
     if "8ball" in query.lower():
         question = query.replace("8ball", "", 1).strip()
-        answer = random.choice(magic8_responses)
+        answer = await generate_ai_response(question, "magic_8ball", magic8_responses)
         results.append(
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
@@ -1040,6 +1186,9 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.inline_query.answer(results)
 
 def main():
+    """
+    Main function to set up and run the bot.
+    """
     # Create application
     application = ApplicationBuilder().token(TOKEN).build()
 
@@ -1053,38 +1202,26 @@ def main():
     application.add_handler(CommandHandler("roast", roast))
     application.add_handler(CommandHandler("challenges", challenges))
     application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler("games", games_menu))
-    application.add_handler(CommandHandler("mood", mood_game))
-    application.add_handler(CommandHandler("completeroast", complete_roast_game))
-    application.add_handler(CommandHandler("regret", regret_game))
-    application.add_handler(CommandHandler("confession", confession_game))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("help", help_command))
-
-    # Add new feature handlers
     application.add_handler(CommandHandler("roastfriend", roastfriend))
     application.add_handler(CommandHandler("roastbattle", roastbattle))
     application.add_handler(CommandHandler("failpredict", failpredict))
     application.add_handler(CommandHandler("admin", admin_commands))
     application.add_handler(CommandHandler("getstats", get_stats_dump))
     application.add_handler(CommandHandler("cleardata", clear_data))
-
-    # Add callback query handler for inline buttons
+    application.add_handler(CommandHandler("games", games_menu))
     application.add_handler(CallbackQueryHandler(button_handler))
-
-    # Add handler for random messages
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_random_message))
-    
-    # Add handler for inline queries
     application.add_handler(InlineQueryHandler(inline_query_handler))
-
-    # Start bot
-    print("🤖 Savage Bot is starting up... Prepare for maximum attitude!")
-    application.run_polling()
-
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_random_message))
+    
+    # Run the bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    # Need to add this import for the inline mode to work
-    import uuid
-
-    main()
+    try:
+        main()
+    except Conflict as e:
+        print(f"Conflict error: {e}. Another instance of the bot is likely running.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
