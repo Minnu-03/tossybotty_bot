@@ -1,7 +1,7 @@
 # tossybotty_bot (A Savage Telegram Bot)
 
 A modular Telegram bot built with python-telegram-bot and Groq language models.  
-It includes coin flips, dice rolls, predictions, challenges, and AI-driven responses, designed with scalability and customization in mind.
+It includes coin flips, dice rolls, predictions, challenges, mini-games, and AI-driven responses,.
 
 ---
 
@@ -48,6 +48,12 @@ It includes coin flips, dice rolls, predictions, challenges, and AI-driven respo
 /games                 — Access mini-games
 /help                  — Show all available commands
 
-
+```
 ## Admin Commands
+
+```text
+/admin — Show admin menu
+/getstats — Export user statistics as JSON
+/cleardata — Clear all in-memory stats
+```
 
