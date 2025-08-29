@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # This token should be kept confidential.
-TOKEN = "8260847467:AAHxVuDpo2AoqtWcgYlIWlTQ9loKzylWcE8"
+TOKEN = ""
 
 # Initialize Groq client
 try:
